@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cockpit Marée Normandie — Le Havre</title>
+  <script src="https://tailwindcss.com"></script>
+  <script src="https://jsdelivr.net"></script>
+  <style>
+    body { background:#0b132b; color:#f8fafc; font-family:system-ui,sans-serif; }
+    .card { background:#1c2541; border:1px solid #3a506b; border-radius:12px; }
+    input,select { background:#0b132b; border:1px solid #3a506b; color:#fff; border-radius:6px; padding:6px 8px; }
+  </style>
+</head>
+<body class="p-4 max-w-6xl mx-auto">
+
+  <header class="flex flex-wrap justify-between items-center mb-5 gap-3 border-b border-slate-700 pb-3">
+    <div>
+      <h1 class="text-2xl font-bold text-cyan-400">⚓ Cockpit Marée Normandie</h1>
+      <p class="text-xs text-slate-400">Port du Havre • Criée, Flotte & Devis en direct</p>
+    </div>
+    <div id="meteo-badge" class="card px-3 py-2 text-xs text-cyan-300">🌊 Météo Le Havre...</div>
+  </header>
+
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="card p-3"><p class="text-xs text-slate-400">Cours Moyen Criée</p><p id="kpi-moy" class="text-xl font-bold mt-1">-- €/kg</p></div>
+    <div class="card p-3"><p class="text-xs text-slate-400">Marge Moyenne</p><p id="kpi-mrg" class="text-xl font-bold text-emerald-400 mt-1">-- %</p></div>
+    <div class="card p-3"><p class="text-xs text-slate-400">Houle Le Havre</p><p id="kpi-houle" class="text-xl font-bold text-cyan-400 mt-1">-- m</p></div>
+    <div class="card p-3"><p class="text-xs text-slate-400">Devis Actif</p><p id="kpi-dev" class="text-xl font-bold text-amber-400 mt-1">0.00 €</p></div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+    <div class="card p-3"><h2 class="text-sm font-semibold text-cyan-300 mb-2">📈 Houle 24h — Le Havre (m)</h2><div class="h-56"><canvas id="cMeteo"></canvas></div></div>
+    <div class="card p-3"><h2 class="text-sm font-semibold text-emerald-300 mb-2">📊 Criée vs Vente (€/kg)</h2><div class="h-56"><canvas id="cPrix"></canvas></div></div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+    <div class="card p-3 md:col-span-2">
+      <h2 class="text-sm font-semibold text-amber-300 mb-2">🧾 Simulateur de Devis</h2>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <select id="sel-esp" class="flex-1 min-w-[150px]"></select>
+        <input type="number" id="inp-kg" value="10" min="1" class="w-20" />
+        <select id="sel-bat" class="w-40">
+          <option>L'Étoile Normande</option>
+          <option>Cap de la Hève</option>
+          <option>Saint-Adresse</option>
+          <option>Le Havre II</option>
+          <option>Fleur de Seine</option>
+        </select>
+        <button onclick="addDev()" class="bg-cyan-500 text-slate-950 font-bold px-3 py-1.5 rounded">+ Ajouter</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <thead class="text-slate-400 border-b border-slate-700"><tr><th class="py-1">Espèce</th><th>Bateau</th><th>Kg</th><th>P.U.</th><th>Total</th><th></th></tr></thead>
+          <tbody id="dev-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card p-3"><h2 class="text-sm font-semibold text-purple-300 mb-2">🚤 Flotte (5 Bateaux)</h2><div class="h-48"><canvas id="cFlotte"></canvas></div></div>
+  </section>
+
+  <section class="card p-3">
+    <div class="flex justify-between items-center mb-2">
+      <h2 class="text-sm font-semibold">🐟 18 Espèces (Modifiables)</h2>
+      <button onclick="resetCat()" class="text-xs bg-slate-700 px-2 py-1 rounded">Défaut</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs text-left">
+        <thead class="text-slate-400 border-b border-slate-700"><tr><th class="py-1">Espèce</th><th>Criée €</th><th>Coeff</th><th>Vente €</th><th>Marge</th></tr></thead>
+        <tbody id="cat-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+<script>
+const defData=[
+  {id:1,n:"Bar de ligne",a:18.5,c:1.35},{id:2,n:"Sole portion",a:16,c:1.35},{id:3,n:"Turbot sauvage",a:22,c:1.3},
+  {id:4,n:"Saint-Pierre",a:17.5,c:1.35},{id:5,n:"Coquille St-Jacques",a:4.8,c:1.45},{id:6,n:"Homard bleu",a:26,c:1.3},
+  {id:7,n:"Cabillaud",a:9.2,c:1.4},{id:8,n:"Lieu jaune",a:8.5,c:1.4},{id:9,n:"Raie bouclée",a:7.9,c:1.4},
+  {id:10,n:"Rouget barbet",a:14,c:1.35},{id:11,n:"Lotte queue",a:19.5,c:1.32},{id:12,n:"Merlan",a:4.5,c:1.5},
+  {id:13,n:"Maquereau",a:3.2,c:1.55},{id:14,n:"Encornet",a:11.5,c:1.38},{id:15,n:"Bulot Normandie",a:3.9,c:1.5},
+  {id:16,n:"Tourteau vivant",a:6.2,c:1.45},{id:17,n:"Grondin rouge",a:5.4,c:1.45},{id:18,n:"Dorade grise",a:7.8,c:1.4}
+];
+let cat=JSON.parse(localStorage.getItem('m_cat'))||JSON.parse(JSON.stringify(defData));
+let dev=[],chP=null,chF=null;
+
+function drawCat(){
+  const tb=document.getElementById('cat-body'),sl=document.getElementById('sel-esp');
+  tb.innerHTML=''; sl.innerHTML='';
+  let sA=0,sM=0;
+  cat.forEach((x,i)=>{
+    const v=x.a*x.c, m=v-x.a;
+    sA+=x.a; sM+=(m/v)*100;
+    tb.innerHTML+=`<tr class="border-b border-slate-800"><td class="py-1.5 font-medium">${x.n}</td>
+      <td><input type="number" step="0.1" value="${x.a.toFixed(2)}" onchange="upd(${i},'a',this.value)" class="w-20"></td>
+      <td><input type="number" step="0.01" value="${x.c.toFixed(2)}" onchange="upd(${i},'c',this.value)" class="w-16"></td>
+      <td class="font-bold text-cyan-400">${v.toFixed(2)}€</td><td class="text-emerald-400">+${m.toFixed(2)}€</td></tr>`;
+    sl.innerHTML+=`<option value="${x.id}">${x.n} (${v.toFixed(2)}€)</option>`;
+  });
+  document.getElementById('kpi-moy').textContent=(sA/cat.length).toFixed(2)+' €/kg';
+  document.getElementById('kpi-mrg').textContent=(sM/cat.length).toFixed(1)+' %';
+  localStorage.setItem('m_cat',JSON.stringify(cat));
+  if(chP)chP.destroy();
+  const t8=cat.slice(0,8);
+  chP=new Chart(document.getElementById('cPrix'),{type:'bar',data:{labels:t8.map(e=>e.n),datasets:[
+    {label:'Criée',data:t8.map(e=>e.a),backgroundColor:'#3b82f6'},
+    {label:'Vente',data:t8.map(e=>+(e.a*e.c).toFixed(2)),backgroundColor:'#10b981'}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#cbd5e1'}}},scales:{x:{ticks:{color:'#94a3b8'}},y:{ticks:{color:'#94a3b8'}}}}});
+}
+function upd(i,k,v){cat[i][k]=parseFloat(v)||0;drawCat();}
+function resetCat(){cat=JSON.parse(JSON.stringify(defData));drawCat();}
+
+function addDev(){
+  const e=cat.find(x=>x.id==document.getElementById('sel-esp').value);
+  const kg=parseFloat(document.getElementById('inp-kg').value)||0;
+  const b=document.getElementById('sel-bat').value;
+  if(!e||kg<=0)return;
+  const pu=e.a*e.c;
+  dev.push({n:e.n,b,kg,pu,tot:pu*kg});
+  drawDev();
+}
+function delDev(i){dev.splice(i,1);drawDev();}
+function drawDev(){
+  const tb=document.getElementById('dev-body'); tb.innerHTML='';
+  let tot=0, bats={"L'Étoile Normande":0,"Cap de la Hève":0,"Saint-Adresse":0,"Le Havre II":0,"Fleur de Seine":0};
+  dev.forEach((l,i)=>{
+    tot+=l.tot; bats[l.b]=(bats[l.b]||0)+l.kg;
+    tb.innerHTML+=`<tr class="border-b border-slate-800"><td class="py-1">${l.n}</td><td class="text-cyan-300">${l.b}</td><td>${l.kg}</td><td>${l.pu.toFixed(2)}€</td><td class="font-bold text-amber-400">${l.tot.toFixed(2)}€</td><td><button onclick="delDev(${i})" class="text-rose-400">✕</button></td></tr>`;
+  });
+  document.getElementById('kpi-dev').textContent=tot.toFixed(2)+' €';
+  if(chF)chF.destroy();
+  const vals=Object.values(bats), sum=vals.reduce((a,b)=>a+b,0);
+  const dataFlotte = sum > 0 ? vals :;
+  chF=new Chart(document.getElementById('cFlotte'),{type:'doughnut',data:{labels:Object.keys(bats),datasets:[{data:dataFlotte,backgroundColor:['#06b6d4','#10b981','#f59e0b','#8b5cf6','#ec4899']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#cbd5e1',font:{size:10}}}}}});
+}
+
+fetch('https://open-meteo.com')
+  .then(r=>r.json()).then(d=>{
+    const h=d.hourly.time.map(t=>t.slice(11,16)), v=d.hourly.wave_height;
+    document.getElementById('kpi-houle').textContent=v[0]+' m';
+    document.getElementById('meteo-badge').innerHTML=`<span class="text-emerald-400 font-bold">● Le Havre Direct</span> • Houle : <b>${v[0]} m</b>`;
+    new Chart(document.getElementById('cMeteo'),{type:'line',data:{labels:h,datasets:[{label:'Vagues (m)',data:v,borderColor:'#22d3ee',backgroundColor:'rgba(34,211,238,0.15)',fill:true,tension:0.4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#cbd5e1'}}},scales:{x:{ticks:{color:'#94a3b8',maxTicksLimit:8}},y:{ticks:{color:'#94a3b8'},beginAtZero:true}}}});
+  }).catch(()=>{document.getElementById('meteo-badge').textContent='⚠️ Météo indisponible';});
+
+drawCat(); drawDev();
+</script>
+</body>
+</html>
